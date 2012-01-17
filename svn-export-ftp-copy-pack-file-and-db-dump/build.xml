@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project name="App" description="App description" default="main">
+   
+    <!-- Timestamp -->
+    <tstamp>
+        <format property="build.time" pattern="%Y-%m-%d %H %M" />
+    </tstamp>
+    
+    <!-- SVN export properties -->
+    <property name="exportdir" value="/backups/a8s_rank/export/${build.time}" override="true" />
+    <property name="srcdir"   value="${project.basedir}" override="true" />
+    
+    <!-- SVN ftp copy configuration file -->
+    
+    <property name="box" value="dev" override="yes" />
+    <property file="build_${box}.properties" />
+    
+    <fileset dir="${exportdir}" id="TheFiles">
+            <exclude name="build/*.*"/>
+            <exclude name="db/*.*"/>             
+    </fileset>   
+
+    <!-- SVN export task -->
+    <target name="main">
+          <echo msg="Exporting HEAD revision . Started at ${phing.startTime}" />
+         <phingcall target="ftp_copy" />  
+         <phingcall target="arhive" />  
+         <phingcall target="clean_up" />  
+    </target>
+    
+     <target name="clean">
+         <echo msg="Cleaning directory ${exportdir} if exists" />
+         <delete dir="${exportdir}"/>
+    </target>  
+    
+    <target name="svnexport" depends="clean">
+        <svnexport
+            repositoryurl="${svn.repo}"
+            todir="${exportdir}"
+            username="${svn.username}"
+            password="${svn.password}"
+            nocache="true"
+            revision="${svn.revision}"
+        />
+    </target>
+   
+    <!-- Ftp copy task -->
+    <target name="ftp_copy" depends="svnexport"> 
+         <echo>Copy files via FTP</echo>  
+        <ftpdeploy 
+            host="${ftp.destination.host}"
+            port="${ftp.destination.port}"
+            username="${ftp.destination.username}"
+            password="${ftp.destination.password}"
+            dir="${ftp.destination.dir}"
+            mode="${ftp.destination.mode}">
+            <fileset refid="TheFiles" />
+        </ftpdeploy>        
+    </target>
+    
+    <!-- Arhive task as tar & backup mysql databast -->
+    <target name="arhive"> 
+        <echo msg="Backup file to  ${exportdir}/code.tar" />
+        <tar destfile="${exportdir}/code.tar">            
+            <fileset refid="TheFiles" />
+         </tar>
+         
+         <echo msg="Backup database to ${exportdir}/db.sql" />
+         <property name="backup_mysql_command" value="${mysql.dump_location} -u${mysql.username} -p${mysql.password} -h ${mysql.server} ${mysql.database} > '${exportdir}/db.sql' ;"/> 
+         <echo level="debug" msg="EXEC COMMAND = ${backup_mysql_command}" />         
+         <exec command="${backup_mysql_command}"  />
+    </target>
+    
+    <!-- Delete all the files from backup except the code & db code-->  
+     
+    <target name="clean_up">
+      <delete includeemptydirs="true">        
+        <fileset dir="${exportdir}">
+            <include name="**/**"/>
+            <exclude name="code.tar"/>
+             <exclude name="db.sql"/>
+          </fileset>  
+     </delete>
+    </target>
+    
+    
+</project>
